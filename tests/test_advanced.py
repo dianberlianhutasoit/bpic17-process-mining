@@ -43,6 +43,24 @@ class TestAdvancedAnalysisContract(unittest.TestCase):
             self.assertTrue(res["evidence"].empty)
             self.assertTrue(res["per_case"].empty)
 
+    def test_accepts_pm4py_event_log_object(self) -> None:
+        import pm4py
+
+        df = _make_df(
+            [
+                ("C1", "W_Assess potential fraud", "2017-01-01T10:00:00+01:00", "complete", "User_1"),
+                ("C1", "W_Assess potential fraud", "2017-01-01T11:00:00+01:00", "complete", "User_1"),
+                ("C1", "O_Cancelled", "2017-01-01T12:00:00+01:00", "complete", "User_1"),
+                ("C1", "O_Accepted", "2017-01-01T13:00:00+01:00", "complete", "User_1"),
+            ]
+        )
+        df[COL_TIMESTAMP] = pd.to_datetime(df[COL_TIMESTAMP], utc=True)
+        event_log = pm4py.convert_to_event_log(df)
+        results = run_all_advanced(event_log)
+        self.assertEqual(results["11.15"]["case_ids"], ["C1"])
+        self.assertEqual(results["11.18"]["case_ids"], ["C1"])
+        self.assertEqual(results["11.22"]["case_ids"], ["C1"])
+
     def test_missing_required_column_raises_value_error(self) -> None:
         bad_df = pd.DataFrame(
             {
