@@ -36,14 +36,8 @@ from src.overview import filter_case_durations
 from src.table_model import make_table, show_dataframe
 from src.workers import AnalysisWorker, LoadWorker
 
-try:
-    from src.case_explorer import CaseExplorerWidget
-except ImportError:
-    from src.fallbacks import SimpleCaseExplorer as CaseExplorerWidget
-try:
-    from src import exporter
-except ImportError:
-    from src import fallbacks as exporter
+from src.case_explorer import CaseExplorerWidget
+from src import exporter
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -54,6 +48,20 @@ ANALYSES = {
     "11.22": analyze_11_22,
 }
 ANALYSIS_ORDER = ["11.7", "11.15", "11.18", "11.22"]
+
+# Judul daftar case di Case Explorer untuk hasil 11.7 (C, D, E)
+EXPLORER_TITLES_117 = {
+    "C": "Exercise 11.7 C (successful)",
+    "D": "Exercise 11.7 D (unsuccessful)",
+    "E": "Exercise 11.7 E (canceled)",
+}
+
+
+def explorer_titles(key: str) -> list[str]:
+    """Judul daftar case di Case Explorer yang dihasilkan oleh satu analisis."""
+    if key == "11.7":
+        return list(EXPLORER_TITLES_117.values())
+    return [f"Exercise {key}"]
 
 
 def format_dataset_info(loaded: LoadedEventLog) -> str:
@@ -113,6 +121,7 @@ class MainWindow(QMainWindow):
         self._loading = False
         self._current: str | None = None
         self._queue: list[str] = []
+        self._failed: list[str] = []
 
         self._build_toolbar()
         self._build_tabs()
@@ -402,6 +411,8 @@ class MainWindow(QMainWindow):
     def request_analysis(self, keys: list[str]) -> None:
         if self.loaded is None or self._loading:
             return
+        if self._current is None and not self._queue:
+            self._failed.clear()  # mulai putaran baru
         for key in keys:
             if key != self._current and key not in self._queue:
                 self._queue.append(key)
@@ -425,7 +436,11 @@ class MainWindow(QMainWindow):
     def _on_analysis_done(self, key: str, result: dict[str, Any]) -> None:
         self.results[key] = result
         self.panels[key].show_result(result)
-        if key != "11.7":
+        if key == "11.7":
+            subsets = result["summary"]["case_ids_by_question"]
+            for code, title in EXPLORER_TITLES_117.items():
+                self.explorer.show_cases(title, subsets[code])
+        else:
             self.explorer.show_cases(f"Exercise {key}", result["case_ids"])
         self._current = None
         self._refresh_export_combo()
@@ -434,6 +449,7 @@ class MainWindow(QMainWindow):
     def _on_analysis_failed(self, key: str, message: str) -> None:
         self.panels[key].set_running(False)
         self.panels[key].status_label.setText("Gagal.")
+        self._failed.append(key)
         self._current = None
         QMessageBox.critical(self, f"Analisis {key} gagal", message)
         self._continue_or_finish()
@@ -444,7 +460,12 @@ class MainWindow(QMainWindow):
         else:
             self.progress.hide()
             self.progress.setRange(0, 100)
-            self.status_label.setText("Analisis selesai.")
+            if self._failed:
+                self.status_label.setText(
+                    "Analisis selesai, tetapi GAGAL untuk: " + ", ".join(self._failed)
+                )
+            else:
+                self.status_label.setText("Analisis selesai.")
         self._update_enabled_state()
 
     # ------------------------------------------------------------------ reset
@@ -468,6 +489,8 @@ class MainWindow(QMainWindow):
     def on_panel_reset(self, key: str) -> None:
         self.results.pop(key, None)
         self.panels[key].clear()
+        for title in explorer_titles(key):
+            self.explorer.remove_cases(title)
         self._refresh_export_combo()
         self._update_enabled_state()
 
