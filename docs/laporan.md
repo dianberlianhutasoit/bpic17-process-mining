@@ -4,8 +4,8 @@
 | | |
 | --- | --- |
 | Mata kuliah / kelas | Penambangan Data/ A |
-| Dosen | [isi] |
-| Anggota (nama lengkap, NIM) | Shakila Tungga Dewo - 2406012312025;... |
+| Dosen | Dr. Indra Waspada, S.T., M.TI |
+| Anggota (nama lengkap, NIM) | Shakila Tungga Dewi;Gregorius Septiano Ariadi; dian berlian hutasoit; Husein Avicenna; Shofi Rasyida Nata |
 | Repositori | https://github.com/dianberlianhutasoit/bpic17-process-mining |
 | Tanggal | 25 November 2026 |
 
