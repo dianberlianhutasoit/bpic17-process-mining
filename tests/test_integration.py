@@ -11,6 +11,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -189,7 +190,7 @@ def explorer_sources(win: MainWindow) -> list[str]:
 
 
 # --------------------------------------------------------------- impor + overview
-def test_real_modules_are_used_instead_of_fallbacks() -> None:
+def test_main_window_uses_real_modules() -> None:
     assert main_window.CaseExplorerWidget.__module__ == "src.case_explorer"
     assert main_window.exporter.__name__ == "src.exporter"
 
@@ -467,21 +468,72 @@ def test_missing_optional_attribute(
     assert attribute not in table(window.explorer.trace_table).columns
 
 
-# ------------------------------------------------- bug terbuka (docs/test_report.md)
-@pytest.mark.xfail(reason="BUG-01: hasil 11.7 C/D/E belum dikirim ke Case Explorer")
-def test_explorer_lists_117_subquestions(analyzed) -> None:
-    assert any("11.7" in source for source in explorer_sources(analyzed))
+# ------------------------------------- regresi BUG-01 s.d. BUG-03 (docs/test_report.md)
+EXPLORER_LISTS = {
+    "Exercise 11.7 C (successful)": EXPECTED_117["C"],
+    "Exercise 11.7 D (unsuccessful)": EXPECTED_117["D"],
+    "Exercise 11.7 E (canceled)": EXPECTED_117["E"],
+    **{f"Exercise {key}": cases for key, cases in EXPECTED_CASES.items()},
+}
 
 
-@pytest.mark.xfail(reason="BUG-02: reset panel belum menghapus daftarnya di Case Explorer")
-def test_reset_panel_removes_list_from_explorer(analyzed) -> None:
-    analyzed.panels["11.15"].btn_reset.click()
-    assert "Exercise 11.15" not in explorer_sources(analyzed)
+def test_explorer_lists_match_every_analysis(analyzed) -> None:
+    assert explorer_sources(analyzed) == ["Semua case", *EXPLORER_LISTS]
+    for title, expected in EXPLORER_LISTS.items():
+        analyzed.explorer.source_combo.setCurrentText(title)
+        shown = table(analyzed.explorer.case_table)[COL_CASE_ID].tolist()
+        assert sorted(shown) == sorted(expected), title
 
 
-@pytest.mark.xfail(reason="BUG-03: status 'Analisis selesai.' walau ada analisis yang gagal")
+@pytest.mark.parametrize("key", ANALYSIS_ORDER)
+def test_reset_panel_removes_only_its_lists_from_explorer(analyzed, key) -> None:
+    analyzed.panels[key].btn_reset.click()
+    removed = [title for title in EXPLORER_LISTS if title.startswith(f"Exercise {key}")]
+    assert len(removed) == (3 if key == "11.7" else 1)
+    kept = [title for title in EXPLORER_LISTS if title not in removed]
+    assert explorer_sources(analyzed) == ["Semua case", *kept]
+
+
+def test_reset_panel_while_its_list_is_open(analyzed) -> None:
+    analyzed.explorer.source_combo.setCurrentText("Exercise 11.7 E (canceled)")
+    analyzed.panels["11.7"].btn_reset.click()
+    assert analyzed.explorer.source_combo.currentText() == "Semua case"
+    assert len(table(analyzed.explorer.case_table)) == TOTAL_CASES
+
+
 def test_status_reports_failed_analysis(window, tmp_path, import_file) -> None:
     path = write_xes(tmp_path / "x.xes", SCENARIOS, drop=("lifecycle:transition",))
     import_file(window, path)
     run_all(window)
-    assert "gagal" in window.status_label.text().lower()
+    assert window.status_label.text().endswith("GAGAL untuk: 11.15, 11.18")
+    # putaran baru yang berhasil tidak membawa kegagalan lama
+    window.panels["11.22"].btn_run.click()
+    wait_idle(window)
+    assert window.status_label.text() == "Analisis selesai."
+
+
+# ------------------------------------------------- bug terbuka (docs/test_report.md)
+@pytest.mark.xfail(
+    strict=True, reason="BUG-08: analisis yang gagal dua kali ditulis dua kali di status"
+)
+def test_failed_analysis_is_listed_once(window, tmp_path, import_file, monkeypatch) -> None:
+    path = write_xes(tmp_path / "x.xes", SCENARIOS, drop=("lifecycle:transition",))
+    import_file(window, path)
+    # 11.7 ditahan supaya 11.15 bisa dijalankan lagi saat antrean belum selesai
+    gate = threading.Event()
+    original = main_window.ANALYSES["11.7"]
+
+    def held(df):
+        assert gate.wait(30)
+        return original(df)
+
+    monkeypatch.setitem(main_window.ANALYSES, "11.7", held)
+    window.request_analysis(["11.15", "11.7"])
+    deadline = time.monotonic() + 30
+    while window._current != "11.7" and time.monotonic() < deadline:
+        QApplication.processEvents()
+        time.sleep(0.005)
+    window.panels["11.15"].btn_run.click()
+    gate.set()
+    wait_idle(window)
+    assert window.status_label.text().count("11.15") == 1

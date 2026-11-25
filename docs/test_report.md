@@ -1,6 +1,6 @@
 # Laporan Pengujian (QA) - BPIC17 Tahap 1
 
-Tanggal uji: 25 November 2026. Kode: branch `feat/case-explorer` (commit `225a1fa`) ditambah `tests/test_integration.py`.
+Tanggal uji: 25 November 2026. Kode: `main` (commit `1582671`, PR #1 s.d. #5 sudah masuk) ditambah `tests/test_integration.py`.
 
 | Lingkungan | Nilai |
 | --- | --- |
@@ -14,14 +14,14 @@ Tanggal uji: 25 November 2026. Kode: branch `feat/case-explorer` (commit `225a1f
 
 | Pengujian | Hasil |
 | --- | --- |
-| Seluruh test otomatis (`python -m pytest`) | 159 passed, 1 skipped, 3 xfailed |
-| Test yang di-skip (`RUN_BPIC17_FULL=1`), dijalankan terpisah pada `main` | 1 passed (3 menit 20 detik) |
+| Seluruh test otomatis (`python -m pytest`) | 169 passed, 1 skipped, 1 xfailed |
+| `tests/test_loader.py` dengan `RUN_BPIC17_FULL=1` (termasuk test yang di-skip) | 24 passed (1 menit 41 detik) |
 | 12 skenario wajib lewat GUI | 12 dari 12 sesuai |
 | Alur GUI penuh dengan BPIC17 | 8 jawaban keluar; sama setelah reset dan setelah impor ulang |
-| Kerusakan kode buatan (mutation check) | 9 dari 9 tertangkap test integrasi |
-| Bug terbuka | 4 (lihat bagian 5) |
+| Kerusakan kode buatan (mutation check) | 12 dari 12 tertangkap test integrasi |
+| Bug terbuka | 2: BUG-04 (sedang) dan BUG-08 (rendah), lihat bagian 5 |
 
-`xfailed` adalah test untuk BUG-01 s.d. BUG-03. Setelah bug diperbaiki, test itu muncul sebagai `XPASS` dan penanda `xfail`-nya dihapus.
+`xfailed` adalah test untuk BUG-08. Penandanya `strict`: setelah bug diperbaiki, test itu dilaporkan gagal (`XPASS(strict)`) dan penanda `xfail`-nya harus dihapus. BUG-01 s.d. BUG-03 sudah diperbaiki di PR #5 dan test-nya menjadi test biasa.
 
 Test GUI dijalankan tanpa layar (`QT_QPA_PLATFORM=offscreen`) melalui `MainWindow`, worker, panel, Case Explorer, dan exporter yang sebenarnya. Yang diganti hanya dialog pilih file, dialog simpan, dan kotak pesan.
 
@@ -65,9 +65,10 @@ Skenario tambahan: satu event (durasi 0) dan timestamp sama (urutan XES dipakai)
 | Tanpa `time:timestamp` | Pesan menyebut atribut; log tidak dimuat | Lulus |
 | Tanpa `lifecycle:transition` | Peringatan; 11.15 dan 11.18 gagal dengan pesan; 11.7 dan 11.22 jalan | Lulus |
 | Tanpa `org:resource` | Peringatan; hanya 11.18 gagal | Lulus |
-| Daftar 11.7 C/D/E di Case Explorer | Ada | **Gagal (BUG-01)** |
-| Reset panel menghapus daftar di Case Explorer | Daftar hilang | **Gagal (BUG-02)** |
-| Status setelah ada analisis gagal | Menyebut kegagalan | **Gagal (BUG-03)** |
+| Daftar 11.7 C/D/E, 11.15, 11.18, 11.22 di Case Explorer | Isi setiap daftar sama dengan hasil analisis | Lulus (BUG-01 selesai) |
+| Reset panel menghapus daftar di Case Explorer | Hanya daftar panel itu yang hilang | Lulus (BUG-02 selesai) |
+| Status setelah ada analisis gagal | Menyebut analisis yang gagal; hilang setelah putaran baru berhasil | Lulus (BUG-03 selesai) |
+| Analisis gagal dijalankan lagi saat antrean masih jalan | Ditulis satu kali di status | **Gagal (BUG-08)** |
 
 ## 4. Validasi BPIC17
 
@@ -84,7 +85,7 @@ Skenario tambahan: satu event (durasi 0) dan timestamp sama (urutan XES dipakai)
 | 11.18 | 3 case | 3 (Celonis) | Sama |
 | 11.22 | 902 / 31.509 = 2,8627% | - | Buku tidak memberi jawaban |
 
-Pemeriksaan Case Explorer: urutan trace 313 case sama dengan urutan modul analisis; pasangan `O_Cancelled` -> `O_Accepted` pada 200 case 11.22 pertama berada di posisi yang dilaporkan.
+Pemeriksaan Case Explorer: urutan trace 313 case sama dengan urutan modul analisis; pasangan `O_Cancelled` -> `O_Accepted` pada 200 case 11.22 pertama berada di posisi yang dilaporkan. Daftar di Case Explorer berisi 17.228 (11.7 C), 3.720 (11.7 D), 4.436 (11.7 E), 13 (11.15), 3 (11.18), dan 902 case (11.22); reset panel 11.7 hanya menghapus tiga daftarnya.
 
 ### Selisih mean D dan E
 
@@ -112,28 +113,38 @@ Kesimpulan:
 
 | ID | Masalah | Lokasi | Dampak | Status |
 | --- | --- | --- | --- | --- |
-| BUG-01 | Daftar case 11.7 C/D/E tidak dikirim ke Case Explorer (F07) | `main_window.py`, `_on_analysis_done` | Sedang | Terbuka (Nata) |
-| BUG-02 | Reset panel tidak menghapus daftarnya di Case Explorer | `main_window.py`, `on_panel_reset`; `remove_cases` sudah tersedia | Sedang | Terbuka (Nata) |
-| BUG-03 | Status akhir "Analisis selesai." walau ada analisis yang gagal (pesan error tetap muncul) | `main_window.py`, `_continue_or_finish` | Rendah | Terbuka (Nata) |
-| BUG-04 | GUI tidak merespons hingga 16 detik saat PM4Py membaca BPIC17, walau sudah di worker thread | `workers.py` / `data_loader.py` | Sedang | Terbuka (Nata, Husein) |
+| BUG-01 | Daftar case 11.7 C/D/E tidak dikirim ke Case Explorer (F07) | `main_window.py`, `_on_analysis_done` | Sedang | Selesai di PR #5 (Nata) |
+| BUG-02 | Reset panel tidak menghapus daftarnya di Case Explorer | `main_window.py`, `on_panel_reset`; memakai `remove_cases` | Sedang | Selesai di PR #5 (Nata) |
+| BUG-03 | Status akhir "Analisis selesai." walau ada analisis yang gagal (pesan error tetap muncul) | `main_window.py`, `_continue_or_finish` | Rendah | Selesai di PR #5 (Nata) |
+| BUG-04 | GUI tersendat saat PM4Py membaca BPIC17 (jeda terlama 2,2-16 detik), walau sudah di worker thread | `workers.py` / `data_loader.py` | Sedang | Terbuka (Nata, Husein) |
 | BUG-05 | Label `11.15` di CSV terbaca sebagai angka, berisiko menjadi jam di Excel lokal Indonesia | `exporter.py` | Sedang | Selesai: label menjadi `Exercise 11.15` |
 | BUG-06 | Pencarian lama tersisa setelah impor file baru | versi sementara Case Explorer | Sedang | Selesai di `case_explorer.py` |
 | BUG-07 | Case yang dibuka dari panel tidak terpilih di daftar | versi sementara Case Explorer | Rendah | Selesai di `case_explorer.py` |
+| BUG-08 | Analisis yang gagal, lalu dijalankan lagi saat antrean masih jalan, ditulis dua kali di status ("11.15, 11.18, 11.15") | `main_window.py`, `_on_analysis_failed` | Rendah | Terbuka (Nata) |
 
-Detail BUG-04: diukur tanpa test lain berjalan (aplikasi lain di laptop tetap terbuka), impor dan overview 248,7 detik, 11 jeda di atas 1 detik, terlama 16,0 detik; lima jeda terlama semuanya terjadi saat `pm4py.read_xes`. Dugaan (belum dibuktikan): proses baca menahan GIL Python, ditambah RAM yang hampir penuh (bebas 1,4 GB setelah uji). Saat test lain berjalan bersamaan, jeda mencapai 65 detik. Arah perbaikan yang bisa dicoba: membaca XES di proses terpisah, atau paket opsional `r4pm` yang disarankan PM4Py.
+Detail BUG-04: besar jeda berubah-ubah antar-uji pada laptop yang sama.
+
+| Uji | Impor + overview | Jeda GUI terlama |
+| --- | --- | --- |
+| Sebelum PR #5 | 248,7 detik | 16,0 detik |
+| Setelah PR #5, impor pertama | 83,8 detik | 2,2 detik |
+| Setelah PR #5, impor ulang di sesi yang sama | 127,6 detik | 15,2 detik |
+
+Aplikasi lain di laptop tetap terbuka selama uji, jadi ketiga angka tidak dapat dipakai untuk menilai pengaruh PR #5. Pada uji sebelum PR #5, lima jeda terlama terjadi saat `pm4py.read_xes` dan RAM bebas setelah uji tinggal 1,4 GB. Dugaan (belum dibuktikan): proses baca menahan GIL Python, diperberat RAM yang hampir penuh; saat impor ulang, log lama masih ada di memori. Arah perbaikan yang bisa dicoba: membaca XES di proses terpisah, atau paket opsional `r4pm` yang disarankan PM4Py.
+
+Untuk demo: impor BPIC17 sebelum presentasi dimulai, tutup aplikasi lain, dan hindari impor ulang.
 
 Catatan yang perlu disepakati:
 
 - Posisi event pada hasil 11.22 dihitung dari 0, sedangkan kolom `no` di Case Explorer dari 1.
-- `main_window.py` masih memuat `try/except ImportError` dan `src/fallbacks.py`. Test integrasi memastikan modul asli yang terpakai.
 - `requirements.txt` ber-encoding UTF-16 dan belum memuat pytest.
 
 ## 6. Performa (BPIC17 penuh)
 
 | Aksi | Waktu | Jeda GUI terlama |
 | --- | --- | --- |
-| Impor + overview | 248,7 detik | 16,0 detik |
-| Semua analisis | 61,0 detik | 2,9 detik |
+| Impor + overview | 83,8-248,7 detik | 2,2-16,0 detik (BUG-04) |
+| Semua analisis | 24,2-61,0 detik | 0,7-2,9 detik |
 | Buka case di Case Explorer | 0,15-0,32 detik | - |
 | Cari Case ID di Case Explorer | 0,07 detik | - |
 | Ekspor daftar case + evidence (termasuk baca ulang) | 0,05-0,74 detik | - |
@@ -144,14 +155,14 @@ Memori saat memuat: puncak fisik 1,8 GB, puncak alokasi 4,3 GB (versi `.xes`).
 
 | Butir | Status |
 | --- | --- |
-| Aplikasi dibuka tanpa modifikasi kode | Belum dicek manual (`python main.py`) |
+| Aplikasi dibuka tanpa modifikasi kode | Dijalankan Nata (PR #5, dengan screenshot); belum dicek ulang oleh QA |
 | BPIC17 XES diimpor dan overview tampil | Lulus otomatis |
 | 11.7 A dan B | Lulus otomatis |
 | 11.7 C, D, E: filter, jumlah, mean | Lulus otomatis |
 | 11.15: case dengan dua complete | Lulus otomatis |
 | 11.18: evidence resource sama | Lulus otomatis |
 | 11.22: jumlah, persentase, urutan event | Lulus otomatis |
-| Case Explorer dan ekspor CSV | Lulus otomatis, kecuali BUG-01 dan BUG-02 |
+| Case Explorer dan ekspor CSV | Lulus otomatis |
 | Log sintetis untuk edge case | Tersedia di `tests/test_integration.py` |
 | Semua anggota dapat menjelaskan bagiannya | Belum dicek |
 
