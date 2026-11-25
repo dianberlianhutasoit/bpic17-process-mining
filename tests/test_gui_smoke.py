@@ -10,7 +10,8 @@ from PySide6.QtWidgets import QApplication
 
 from src.advanced_analysis import analyze_11_22
 from src.analysis_panel import AnalysisPanel
-from src.main_window import MainWindow
+from src.case_explorer import CaseExplorerWidget
+from src.main_window import MainWindow, explorer_titles
 from src.table_model import DataFrameModel
 
 
@@ -52,3 +53,22 @@ def test_main_window_builds_all_tabs(app) -> None:
     assert window.tabs.count() == 8
     assert set(window.panels) == {"11.7", "11.15", "11.18", "11.22"}
     assert not window.act_run_all.isEnabled()  # belum ada dataset
+
+
+def test_explorer_titles_mapping(app) -> None:
+    assert explorer_titles("11.22") == ["Exercise 11.22"]
+    assert len(explorer_titles("11.7")) == 3
+
+
+def test_case_explorer_remove_cases_is_safe(app) -> None:
+    explorer = CaseExplorerWidget()
+    explorer.show_cases("Exercise 11.22", ["C1", "C2"])
+    explorer.remove_cases("Exercise 11.22")
+    explorer.remove_cases("judul yang tidak ada")  # tidak boleh error
+
+
+def test_status_reports_failed_analysis(app) -> None:
+    window = MainWindow()
+    window._failed = ["11.15"]
+    window._continue_or_finish()
+    assert "GAGAL" in window.status_label.text()
