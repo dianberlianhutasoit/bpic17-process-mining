@@ -435,6 +435,8 @@ class MainWindow(QMainWindow):
 
     def _on_analysis_done(self, key: str, result: dict[str, Any]) -> None:
         self.results[key] = result
+        if key in self._failed:
+            self._failed.remove(key)
         self.panels[key].show_result(result)
         if key == "11.7":
             subsets = result["summary"]["case_ids_by_question"]
@@ -449,7 +451,8 @@ class MainWindow(QMainWindow):
     def _on_analysis_failed(self, key: str, message: str) -> None:
         self.panels[key].set_running(False)
         self.panels[key].status_label.setText("Gagal.")
-        self._failed.append(key)
+        if key not in self._failed:
+            self._failed.append(key)
         self._current = None
         QMessageBox.critical(self, f"Analisis {key} gagal", message)
         self._continue_or_finish()
