@@ -512,10 +512,6 @@ def test_status_reports_failed_analysis(window, tmp_path, import_file) -> None:
     assert window.status_label.text() == "Analisis selesai."
 
 
-# ------------------------------------------------- bug terbuka (docs/test_report.md)
-@pytest.mark.xfail(
-    strict=True, reason="BUG-08: analisis yang gagal dua kali ditulis dua kali di status"
-)
 def test_failed_analysis_is_listed_once(window, tmp_path, import_file, monkeypatch) -> None:
     path = write_xes(tmp_path / "x.xes", SCENARIOS, drop=("lifecycle:transition",))
     import_file(window, path)
